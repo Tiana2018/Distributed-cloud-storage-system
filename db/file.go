@@ -1,9 +1,9 @@
 package db
 
 import (
+	mydb "Distributed-cloud-storage-system/db/mysql"
 	"database/sql"
 	"fmt"
-	mydb "Distributed-cloud-storage-system/db/mysql"
 )
 
 // OnFileUploadFinished 文件上传完成
@@ -51,11 +51,17 @@ func GetFileMeta(filehash string) (*TableFile, error) {
 	}
 	defer stmt.Close()
 	tfile := TableFile{}
-	stmt.QueryRow(filehash).Scan(
+	err = stmt.QueryRow(filehash).Scan(
 		&tfile.FileHash, &tfile.FileAddr, &tfile.FileName, &tfile.FileSize)
+	// 这里的err没有重新赋值
 	if err != nil {
-		fmt.Println(err.Error())
-		return nil, err
+		if err == sql.ErrNoRows {
+			// 查不到对应记录， 返回参数及错误均为nil
+			return nil, nil
+		} else {
+			fmt.Println(err.Error())
+			return nil, err
+		}
 	}
-	return &tfile,nil
+	return &tfile, nil
 }

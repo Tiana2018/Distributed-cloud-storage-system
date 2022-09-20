@@ -1,9 +1,9 @@
 package handler
 
 import (
-	"fmt"
 	dblayer "Distributed-cloud-storage-system/db"
 	"Distributed-cloud-storage-system/util"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"time"
@@ -44,10 +44,10 @@ func SignupHandler(w http.ResponseWriter, r *http.Request) {
 
 // SignInHandler ： 登陆接口
 func SignInHandler(w http.ResponseWriter, r *http.Request) {
-	//if r.Method == http.MethodGet {
-	//	http.Redirect(w, r, "static/view/signin.html", http.StatusFound)
-	//	return
-	//}
+	if r.Method == http.MethodGet {
+		http.Redirect(w, r, "/static/view/signin.html", http.StatusFound)
+		return
+	}
 	r.ParseForm()
 	username := r.Form.Get("username")
 	password := r.Form.Get("password")
@@ -82,7 +82,6 @@ func SignInHandler(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 	w.Write(resp.JSONBytes())
-	return
 }
 func UserInfoHandler(w http.ResponseWriter, r *http.Request){
 	// 1. 解析请求参数
