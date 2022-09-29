@@ -3,6 +3,7 @@ package main
 import (
 	"Distributed-cloud-storage-system/handler"
 	"fmt"
+	"log"
 	"net/http"
 )
 
@@ -18,8 +19,13 @@ func main() {
 	http.HandleFunc("/file/download", handler.DownloadHandler)
 	http.HandleFunc("/file/update", handler.FileMetaUpdateHandler)
 	http.HandleFunc("/file/delete", handler.FileDeleteHandler)
+	// 秒传接口
 	http.HandleFunc("/file/fastupload",
 		handler.HTTPInterceptor(handler.TryFastUploadHandler))
+	// 下载接口
+	http.HandleFunc("/file/downloadurl",
+		handler.HTTPInterceptor(handler.DownloadURLHandler))
+
 	// 分块上传接口
 	// 初始化分块信息
 	http.HandleFunc("/file/mpupload/init",
@@ -43,6 +49,7 @@ func main() {
 	http.HandleFunc("/user/info", handler.HTTPInterceptor(handler.UserInfoHandler))
 
 	err := http.ListenAndServe(":8080", nil)
+	log.Println("服务器开始启动，监听[0.0.0.0:8080]中")
 	if err != nil {
 		fmt.Printf("Failed to start server,err:%s", err.Error())
 	}

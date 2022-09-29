@@ -1,18 +1,24 @@
 package handler
 
 import (
+	"Distributed-cloud-storage-system/common"
+	"Distributed-cloud-storage-system/config"
 	dblayer "Distributed-cloud-storage-system/db"
 	"Distributed-cloud-storage-system/meta"
+	"Distributed-cloud-storage-system/mq"
 	"Distributed-cloud-storage-system/store/ceph"
+	"Distributed-cloud-storage-system/store/oss"
 	"Distributed-cloud-storage-system/util"
 	"encoding/json"
 	"fmt"
 	"gopkg.in/amz.v1/s3"
 	"io"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -44,7 +50,8 @@ func UploadHandler(w http.ResponseWriter, r *http.Request) {
 			fmt.Printf("Failed to create file", err.Error())
 			return
 		}
-		//defer newFile.Close()
+		defer newFile.Close()
+
 		fileMeta.FileSize, err = io.Copy(newFile, file)
 		if err != nil {
 			fmt.Printf("Failed to save data into file, err:%s\n", err.Error())
@@ -55,12 +62,42 @@ func UploadHandler(w http.ResponseWriter, r *http.Request) {
 
 		// 同时将文件写入ceph存储
 		newFile.Seek(0, 0)
-		data, _ := ioutil.ReadAll(newFile)
-		bucket := ceph.GetCephBucket("userfile")
-		cephPath := "/ceph" + fileMeta.FileSha1
-		_ = bucket.Put(cephPath, data, "octect-stream", s3.PublicRead)
-		fileMeta.Location = cephPath
+		//
+		// ceph
+		if config.CurrentStoreType == common.StoreCeph {
+			data, _ := ioutil.ReadAll(newFile)
+			bucket := ceph.GetCephBucket("userfile")
+			cephPath := "/ceph/" + fileMeta.FileSha1
+			_ = bucket.Put(cephPath, data, "octect-stream", s3.PublicRead)
+			fileMeta.Location = cephPath
+		}
+		// oss
+		// 文件写入OSS存储
+		ossPath := "oss/" + fileMeta.FileSha1
+		//err = oss.Bucket().PutObject(ossPath, newFile)
+		//if err != nil {
+		//	fmt.Printf(err.Error())
+		//	w.Write([]byte("Upload failed!"))
+		//	return
+		//}
+		//fileMeta.Location = ossPath
 
+		data := mq.TransferData{
+			FileHash:      fileMeta.FileSha1,
+			CurLocation:   fileMeta.Location,
+			DestLocation:  ossPath,
+			DestStoreType: common.StoreOSS,
+		}
+		pubData, _ := json.Marshal(data)
+		pubSuc := mq.Publish(
+			config.TransExchangeName,
+			config.TransOSSRoutingKey,
+			pubData,
+			)
+		// 如果发送消息不成功
+		if !pubSuc {
+			// TODO: 当前发送转移信息失败，稍后重试
+		}
 		//meta.UpdateFileMeta(fileMeta)
 		_ = meta.UpdateFileMetaDB(fileMeta)
 
@@ -73,7 +110,6 @@ func UploadHandler(w http.ResponseWriter, r *http.Request) {
 		} else {
 			w.Write([]byte("upload Failed"))
 		}
-		//http.Redirect(w, r, "/file/upload/suc", http.StatusFound)
 	}
 }
 
@@ -85,6 +121,7 @@ func UploadSucHandler(w http.ResponseWriter, r *http.Request) {
 // GetFileMetaHandler  upload finished
 func GetFileMetaHandler(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
+
 	filehash := r.Form["filehash"][0]
 	//fMeta := meta.GetFileMeta(filehash)
 	fMeta, err := meta.GetFileMetaDB(filehash) // 从db里面获得文件信息
@@ -129,7 +166,8 @@ func FileQueryHandler(w http.ResponseWriter, r *http.Request) {
 func DownloadHandler(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
 	fsha1 := r.Form.Get("filehash")
-	fm := meta.GetFileMeta(fsha1)
+	//fm := meta.GetFileMeta(fsha1) 下载失败的原因
+	fm, _ := meta.GetFileMetaDB(fsha1)
 	f, err := os.Open(fm.Location)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -143,7 +181,8 @@ func DownloadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/octect-stream")
-	w.Header().Set("content-Description", "attachment;filename=\""+fm.FileName)
+	// attachment表示文件将会提示下载到本地，而不是直接在浏览器中打开
+	w.Header().Set("content-Description", "attachment; filename=\""+fm.FileName+"\"")
 	w.Write(data)
 
 }
@@ -179,9 +218,12 @@ func FileMetaUpdateHandler(w http.ResponseWriter, r *http.Request) {
 func FileDeleteHandler(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
 	fileSha1 := r.Form.Get("filehash")
+	// 删除文件
 	fMeta := meta.GetFileMeta(fileSha1)
 	os.Remove(fMeta.Location)
+	// 删除文件元信息
 	meta.RemoveFileMeta(fileSha1)
+	// TODO: 删除表文件信息
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -227,4 +269,28 @@ func TryFastUploadHandler(w http.ResponseWriter, r *http.Request) {
 		w.Write(resp.JSONBytes())
 		return
 	}
+}
+
+func DownloadURLHandler(w http.ResponseWriter, r *http.Request) {
+
+	filehash := r.Form.Get("filehash")
+	// 从文件表查找记录
+	row, _ := dblayer.GetFileMeta(filehash)
+	// 判断文件存在OSS/本地还是Ceph
+	log.Println(row.FileAddr.String)
+
+	if strings.HasPrefix(row.FileAddr.String, "/tmp") {
+		username := r.Form.Get("username")
+		token := r.Form.Get("token")
+		tmpUrl := fmt.Sprintf("http://%s/file/download?filehash=%s&username=%s&token=%s",
+			r.Host, filehash, username, token)
+		w.Write([]byte(tmpUrl))
+	} else if strings.HasPrefix(row.FileAddr.String, "/ceph"){
+		// TODO ceph下载url
+	} else if strings.HasPrefix(row.FileAddr.String, "oss/"){
+		// oss 下载url
+		signedURL := oss.DownloadURL(row.FileAddr.String)
+		w.Write([]byte(signedURL))
+	}
+
 }
