@@ -1,5 +1,8 @@
 # Distributed-cloud-storage-system
-Distributed cloud storage system
+
+fileStore-server
+基于 Golang 模拟百度网盘云存储，涉及有Golang、Redis、Ceph、阿里OSS、Gin等技术栈。
+
 ## 用户功能
 - 用户注册
 - 用户登陆
@@ -15,6 +18,10 @@ Distributed cloud storage system
 - 支持ceph私有云进行存储
 - 支持阿里云oss公有云存储
   - 支持文件异步转移
+
+## 优化
+- 使用Gin框架
+- 微服务化和docker部署（待完成）
 
 ## 系统使用：
 1. 创建对应的数据库文件
