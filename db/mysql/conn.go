@@ -1,6 +1,7 @@
 package mysql
 
 import (
+	"Distributed-cloud-storage-system/config"
 	"database/sql"
 	"fmt"
 	"log"
@@ -12,7 +13,7 @@ import (
 var db *sql.DB
 
 func init() {
-	db, _ = sql.Open("mysql", "root:12345678@tcp(127.0.0.1:3306)/fileserver?charset=utf8")
+	db, _ = sql.Open("mysql", config.MySQLSource)
 	db.SetMaxOpenConns(1000)
 	err := db.Ping()
 	if err != nil {
