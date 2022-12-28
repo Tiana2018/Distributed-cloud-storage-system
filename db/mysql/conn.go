@@ -1,13 +1,14 @@
 package mysql
 
 import (
-	"Distributed-cloud-storage-system/config"
 	"database/sql"
 	"fmt"
 	"log"
 	"os"
 
-	_ "github.com/go-sql-driver/mysql" //导入包但不使用，init()
+	"Distributed-cloud-storage-system/config"
+
+	_ "github.com/go-sql-driver/mysql"
 )
 
 var db *sql.DB
@@ -17,16 +18,17 @@ func init() {
 	db.SetMaxOpenConns(1000)
 	err := db.Ping()
 	if err != nil {
-		fmt.Printf("Failed to connect to mysql,err:" + err.Error())
+		fmt.Println("Failed to connect to mysql, err:" + err.Error())
 		os.Exit(1)
 	}
 }
 
-// DBConn:返回数据库连接对象
+// DBConn : 返回数据库连接对象
 func DBConn() *sql.DB {
 	return db
 }
 
+// ParseRows : 解析每一行记录到map对象中
 func ParseRows(rows *sql.Rows) []map[string]interface{} {
 	columns, _ := rows.Columns()
 	scanArgs := make([]interface{}, len(columns))
@@ -51,9 +53,10 @@ func ParseRows(rows *sql.Rows) []map[string]interface{} {
 	}
 	return records
 }
+
 func checkErr(err error) {
 	if err != nil {
 		log.Fatal(err)
-		panic(err)
+		panic(any(err))
 	}
 }

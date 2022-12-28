@@ -1,6 +1,6 @@
 module Distributed-cloud-storage-system
 
-go 1.17
+go 1.18
 
 require (
 	github.com/aliyun/aliyun-oss-go-sdk v2.2.5+incompatible

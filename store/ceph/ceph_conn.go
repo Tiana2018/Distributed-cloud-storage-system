@@ -15,6 +15,7 @@ func GetCephConnection() *s3.S3 {
 		return cephConn
 	}
 	// 1. 初始化ceph的一些信息
+
 	auth := aws.Auth{
 		AccessKey: cfg.CephAccessKey,
 		SecretKey: cfg.CephSecretKey,
@@ -29,10 +30,10 @@ func GetCephConnection() *s3.S3 {
 		S3LowercaseBucket:    false,
 		Sign:                 aws.SignV2,
 	}
+
 	// 2. 创建S3类型的连接
 	return s3.New(auth, curRegion)
 }
-
 
 // GetCephBucket : 获取指定的bucket对象
 func GetCephBucket(bucket string) *s3.Bucket {

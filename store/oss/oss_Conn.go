@@ -55,3 +55,10 @@ func BuildLifecycleRule(bucketName string) {
 
 	Client().SetBucketLifecycle(bucketName, rules)
 }
+
+func GenObjectMeta(filename string) []oss.Option {
+	options := []oss.Option{
+		oss.ContentDisposition(filename),
+	}
+	return options
+}
