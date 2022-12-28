@@ -59,3 +59,21 @@ func GetLastFileMetas(count int) []FileMeta {
 func RemoveFileMeta(fileSha1 string) {
 	delete(fileMetas, fileSha1)
 }
+// GetLastFileMetasDB : 批量从mysql获取文件元信息
+func GetLastFileMetasDB(limit int) ([]FileMeta, error) {
+	tfiles, err := mydb.GetFileMetaList(limit)
+	if err != nil {
+		return make([]FileMeta, 0), err
+	}
+
+	tfilesm := make([]FileMeta, len(tfiles))
+	for i := 0; i < len(tfilesm); i++ {
+		tfilesm[i] = FileMeta{
+			FileSha1: tfiles[i].FileHash,
+			FileName: tfiles[i].FileName.String,
+			FileSize: tfiles[i].FileSize.Int64,
+			Location: tfiles[i].FileAddr.String,
+		}
+	}
+	return tfilesm, nil
+}

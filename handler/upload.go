@@ -11,18 +11,24 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
-// UploadHandler deal with file upload
+// UploadHandler deal with file upload 处理文件上传
 func UploadHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "GET" {
 		// 返回上传html页面
 		data, err := ioutil.ReadFile("./static/view/index.html")
 		if err != nil {
-			fmt.Println("internal server error")
+			io.WriteString(w, "internel server error")
+			return
 		}
 		io.WriteString(w, string(data))
+		// 另一种返回方式:
+		// 动态文件使用http.HandleFunc设置，静态文件使用到http.FileServer设置(见main.go)
+		// 所以直接redirect到http.FileServer所配置的url
+		// http.Redirect(w, r, "/static/view/index.html",  http.StatusFound)
 	} else if r.Method == "POST" {
 		// 接受文件流及存储到本地目录
 		file, head, err := r.FormFile("file")
@@ -115,10 +121,11 @@ func FileQueryHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write(data)
 
 }
+// DownloadHandler : 文件下载接口
 func DownloadHandler(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
 	fsha1 := r.Form.Get("filehash")
-	fm := meta.GetFileMeta(fsha1)
+	fm,_ := meta.GetFileMetaDB(fsha1)
 	f, err := os.Open(fm.Location)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -126,14 +133,13 @@ func DownloadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer f.Close()
 
-	data, err := ioutil.ReadAll(f)
+	w.Header().Set("Content-Type", "application/octect-stream")
+	w.Header().Set("content-Description", "attachment;filename=\""+fm.FileName+"\"")
+	_, err = io.Copy(w,f)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	w.Header().Set("Content-Type", "application/octect-stream")
-	w.Header().Set("content-Description", "attachment;filename=\""+fm.FileName)
-	w.Write(data)
 
 }
 
@@ -215,5 +221,26 @@ func TryFastUploadHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		w.Write(resp.JSONBytes())
 		return
+	}
+}
+// DownloadURLHandler : 生成文件的下载地址
+func DownloadURLHandler(w http.ResponseWriter, r *http.Request) {
+	filehash := r.Form.Get("filehash")
+	// 从文件表查找记录
+	row, _ := dblayer.GetFileMeta(filehash)
+
+	// TODO: 判断文件存在OSS，还是Ceph，还是在本地
+
+	if strings.HasPrefix(row.FileAddr.String, "/tmp") {
+		username := r.Form.Get("username")
+		token := r.Form.Get("token")
+		tmpUrl := fmt.Sprintf("http://%s/file/download?filehash=%s&username=%s&token=%s",
+			r.Host, filehash, username, token)
+		fmt.Println(row.FileAddr.String,tmpUrl)
+		w.Write([]byte(tmpUrl))
+	} else if strings.HasPrefix(row.FileAddr.String, "/ceph") {
+		// TODO: ceph下载url
+	} else if strings.HasPrefix(row.FileAddr.String, "oss/") {
+		// TODO: oss下载url
 	}
 }
