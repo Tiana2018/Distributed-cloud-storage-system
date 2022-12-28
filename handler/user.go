@@ -49,7 +49,7 @@ func DoSignupHandler(c *gin.Context) {
 	} else {
 		c.JSON(http.StatusOK,
 			gin.H{
-				"code": 0,
+				"code": 10,
 				"msg":  "注册失败",
 				"data": nil,
 			})
